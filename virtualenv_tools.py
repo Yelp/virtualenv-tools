@@ -28,6 +28,7 @@ ACTIVATION_SCRIPTS = [
     'activate.fish'
 ]
 _pybin_match = re.compile(r'^python\d+\.\d+$')
+_pypy_match = re.compile(r'^\d+.\d+$')
 _activation_path_re = re.compile(
     r'^(?:set -gx |setenv |)VIRTUAL_ENV[ =]"(.*?)"\s*$',
 )
@@ -167,7 +168,7 @@ def update_pycs(lib_dir, new_path):
                 update_pyc(filename, local_path)
 
 
-def _update_pth_file(pth_filename, orig_path):
+def _update_pth_file(pth_filename, orig_path, is_pypy):
     with open(pth_filename) as f:
         lines = f.readlines()
     changed = False
@@ -178,7 +179,10 @@ def _update_pth_file(pth_filename, orig_path):
         changed = True
         relto_original = os.path.relpath(val, orig_path)
         # lib/pythonX.X/site-packages
-        relto_pth = os.path.join('../../..', relto_original)
+        relto_pth = os.path.join(
+            '..' if is_pypy else '../../..',
+            relto_original
+        )
         lines[i] = '{}\n'.format(relto_pth)
     if changed:
         with open(pth_filename, 'w') as f:
@@ -186,12 +190,12 @@ def _update_pth_file(pth_filename, orig_path):
         debug('P {}'.format(pth_filename))
 
 
-def update_pth_files(site_packages, orig_path):
+def update_pth_files(site_packages, orig_path, is_pypy):
     """Converts /full/paths in pth files to relative relocatable paths."""
     for filename in os.listdir(site_packages):
         filename = os.path.join(site_packages, filename)
         if filename.endswith('.pth') and os.path.isfile(filename):
-            _update_pth_file(filename, orig_path)
+            _update_pth_file(filename, orig_path, is_pypy)
 
 
 def remove_local(base):
@@ -208,8 +212,9 @@ def remove_local(base):
 def update_paths(venv, new_path):
     """Updates all paths in a virtualenv to a new one."""
     update_scripts(venv.bin_dir, venv.orig_path, new_path)
-    update_pycs(venv.lib_dir, new_path)
-    update_pth_files(venv.site_packages, venv.orig_path)
+    for lib_dir in venv.lib_dirs:
+        update_pycs(lib_dir, new_path)
+    update_pth_files(venv.site_packages, venv.orig_path, venv.is_pypy)
     remove_local(venv.path)
     update_scripts(venv.bin_dir, venv.orig_path, new_path, activation=True)
 
@@ -240,7 +245,14 @@ class NotAVirtualenvError(OSError):
 
 
 Virtualenv = collections.namedtuple(
-    'Virtualenv', ('path', 'bin_dir', 'lib_dir', 'site_packages', 'orig_path'),
+    'Virtualenv', (
+        'path',
+        'bin_dir',
+        'lib_dirs',
+        'site_packages',
+        'orig_path',
+        'is_pypy'
+    ),
 )
 
 
@@ -271,7 +283,51 @@ def _get_original_state(path):
         raise NotAVirtualenvError(path, 'directory', site_packages)
 
     orig_path = get_orig_path(path)
-    return Virtualenv(path, bin_dir, lib_dir, site_packages, orig_path)
+    return Virtualenv(
+        path=path,
+        bin_dir=bin_dir,
+        lib_dirs=[lib_dir],
+        site_packages=site_packages,
+        orig_path=orig_path,
+        is_pypy=False
+    )
+
+
+def _get_original_state_pypy(path):
+    bin_dir = os.path.join(path, 'bin')
+    base_lib_dir = os.path.join(path, 'lib-python')
+    activate_file = os.path.join(bin_dir, 'activate')
+
+    for dir_path in (bin_dir, base_lib_dir):
+        if not os.path.isdir(dir_path):
+            raise NotAVirtualenvError(path, 'directory', dir_path)
+    if not os.path.isfile(activate_file):
+        raise NotAVirtualenvError(path, 'file', activate_file)
+
+    lib_dirs = [
+        os.path.join(base_lib_dir, potential_lib_dir)
+        for potential_lib_dir in os.listdir(base_lib_dir)
+        if _pypy_match.match(potential_lib_dir)
+    ]
+    if len(lib_dirs) != 1:
+        raise NotAVirtualenvError(
+            path, 'directory', os.path.join(base_lib_dir, '#.#'),
+        )
+    lib_dir, = lib_dirs
+
+    site_packages = os.path.join(path, 'site-packages')
+    if not os.path.isdir(site_packages):
+        raise NotAVirtualenvError(path, 'directory', site_packages)
+
+    orig_path = get_orig_path(path)
+    return Virtualenv(
+        path=path,
+        bin_dir=bin_dir,
+        lib_dirs=[lib_dir, os.path.join(path, 'lib_pypy')],
+        site_packages=site_packages,
+        orig_path=orig_path,
+        is_pypy=True
+    )
 
 
 def main(argv=None):
@@ -304,7 +360,9 @@ def main(argv=None):
         return 1
 
     try:
-        venv = _get_original_state(args.path)
+        is_pypy = os.path.isdir(os.path.join(args.path, 'lib_pypy'))
+        venv = _get_original_state_pypy(args.path) \
+            if is_pypy else _get_original_state(args.path)
     except NotAVirtualenvError as e:
         print(e)
         return 1
