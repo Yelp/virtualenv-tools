@@ -81,7 +81,7 @@ def update_script(path, exe_dir):
     if not contents.startswith(b'#!'):
         return
 
-    lines = contents.decode().splitlines(keepends=True)
+    lines = contents.decode().splitlines(True)
     first_line = lines[0]
 
     # Remove the #! and trailing whitespace.
@@ -105,7 +105,7 @@ def update_script(path, exe_dir):
     old_path = executable_path.rstrip(filename)
     new_path = os.path.normpath(exe_dir) + os.path.sep
 
-    lines[0] = first_line.replace(old_path, new_path, count=1)
+    lines[0] = first_line.replace(old_path, new_path, 1)
     with atomic_write(path, overwrite=True) as f:
         f.write(''.join(lines))
 
