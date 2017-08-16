@@ -73,28 +73,44 @@ def path_is_within(path, within):
     return not relpath.startswith('.')
 
 
-def update_script(script_filename, old_path, new_path):
+def update_script(path, exe_dir):
     """Updates shebang lines for actual scripts."""
-    with open(script_filename, 'rb') as f:
-        if f.read(2) != b'#!':
-            return
+    with open(path, 'rb') as f:
+        contents = f.read()
 
-    with open(script_filename) as f:
-        lines = list(f)
-    args = lines[0][2:].strip().split()
-    if not args:
+    if not contents.startswith(b'#!'):
         return
 
-    if path_is_within(args[0], old_path):
-        new_bin = os.path.join(new_path, os.path.relpath(args[0], old_path))
+    lines = contents.decode().splitlines(True)
+    first_line = lines[0]
+
+    # Remove the #! and trailing whitespace.
+    executable_path = first_line[2:].strip()
+    if not executable_path:
+        return
+
+    # If the executable path contains spaces it will be wrapped in quotes.
+    if executable_path.startswith('"'):
+        path_start = executable_path.find('"') + 1
+        path_end = executable_path.find('"', path_start)
+        executable_path = executable_path[path_start:path_end]
+
+    # Otherwise, the executable path is whatever precedes the first space.
     else:
-        return
+        executable_path = executable_path.split()[0]
 
-    args[0] = new_bin
-    lines[0] = '#!%s\n' % ' '.join(args)
-    debug('S %s' % script_filename)
-    with open(script_filename, 'w') as f:
-        f.writelines(lines)
+    filename = os.path.basename(executable_path)
+
+    # Removing all instances of characters in filename from the right side
+    # is safe because of the path separator. Indeed, we want to remove only
+    # the filename and keep the separator.
+    old_path = executable_path.rstrip(filename)
+    new_path = os.path.normpath(exe_dir) + os.path.sep
+
+    lines[0] = first_line.replace(old_path, new_path, 1)
+    debug('S %s' % path)
+    with open(path, 'w') as f:
+        f.write(''.join(lines))
 
 
 def update_scripts(bin_dir, orig_path, new_path, activation=False):
@@ -104,7 +120,7 @@ def update_scripts(bin_dir, orig_path, new_path, activation=False):
         if fname in ACTIVATION_SCRIPTS and activation:
             update_activation_script(path, new_path)
         elif os.path.isfile(path):
-            update_script(path, orig_path, new_path)
+            update_script(path, new_path)
 
 
 def update_pyc(filename, new_path):
