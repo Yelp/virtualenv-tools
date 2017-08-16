@@ -106,7 +106,7 @@ def update_script(path, exe_dir):
     new_path = os.path.normpath(exe_dir) + os.path.sep
 
     lines[0] = first_line.replace(old_path, new_path, 1)
-    with atomic_write(path, overwrite=True) as f:
+    with open(path, 'w') as f:
         f.write(''.join(lines))
 
 
