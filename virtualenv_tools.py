@@ -29,7 +29,7 @@ ACTIVATION_SCRIPTS = [
     'activate.xsh',
 ]
 _pybin_match = re.compile(r'^python\d+\.\d+$')
-_pypy_match = re.compile(r'^\d+.\d+$')
+_pypy_match = re.compile(r'^\d+(.\d+)?$')
 _activation_path_re = re.compile(
     r'^(?:set -gx |setenv |)VIRTUAL_ENV[ =][\'"](.*?)[\'"]\s*$',
 )
@@ -294,7 +294,7 @@ def _get_original_state(path):
         raise NotAVirtualenvError(
             path,
             'directory',
-            os.path.join(base_lib_dir, '#.#' if is_pypy else 'python#.#'),
+            os.path.join(base_lib_dir, '#(.#)?' if is_pypy else 'python#.#'),
         )
     lib_dir, = lib_dirs
 
