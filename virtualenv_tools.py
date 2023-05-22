@@ -10,8 +10,6 @@
     :copyright: (c) 2012 by Fireteam Ltd.
     :license: BSD, see LICENSE for more details.
 """
-from __future__ import print_function
-
 import argparse
 import collections
 import marshal
@@ -34,13 +32,11 @@ _activation_path_re = re.compile(
     r'^(?:set -gx |setenv |)VIRTUAL_ENV[ =][\'"](.*?)[\'"]\s*$',
 )
 VERBOSE = False
-MAGIC_LENGTH = 4 + 4  # magic length + 4 byte timestamp
-# In python3.3, a 4 byte "size" hint was added to pyc files
-if sys.version_info >= (3, 3):  # pragma: no cover (PY33+)
-    MAGIC_LENGTH += 4
+# magic length
+# + 4 byte timestamp
+# + 4 byte "size" hint was added to pyc files
 # PEP 552 (implemented in python 3.7) extends this by another word
-if sys.version_info >= (3, 7):  # pragma: no cover (PY37+)
-    MAGIC_LENGTH += 4
+MAGIC_LENGTH = 4 + 4 + 4 + 4
 
 
 def debug(msg):
@@ -124,25 +120,6 @@ def update_pyc(filename, new_path):
             print('Error in %s' % filename)
             raise
 
-    def _make_code(code, filename, consts):
-        if sys.version_info[0] == 2:  # pragma: no cover (PY2)
-            return CodeType(
-                code.co_argcount, code.co_nlocals, code.co_stacksize,
-                code.co_flags, code.co_code, tuple(consts), code.co_names,
-                code.co_varnames, filename, code.co_name, code.co_firstlineno,
-                code.co_lnotab, code.co_freevars, code.co_cellvars,
-            )
-        elif sys.version_info < (3, 8):  # pragma: no cover (<py38)
-            return CodeType(
-                code.co_argcount, code.co_kwonlyargcount, code.co_nlocals,
-                code.co_stacksize, code.co_flags, code.co_code, tuple(consts),
-                code.co_names, code.co_varnames, filename, code.co_name,
-                code.co_firstlineno, code.co_lnotab, code.co_freevars,
-                code.co_cellvars,
-            )
-        else:  # pragma: no cover (py38+)
-            return code.replace(co_consts=tuple(consts), co_filename=filename)
-
     def _process(code):
         consts = []
         for const in code.co_consts:
@@ -150,7 +127,7 @@ def update_pyc(filename, new_path):
                 const = _process(const)
             consts.append(const)
         if new_path != code.co_filename or consts != list(code.co_consts):
-            code = _make_code(code, new_path, consts)
+            code = code.replace(co_filename=new_path, co_consts=tuple(consts))
         return code
 
     new_code = _process(code)
@@ -197,11 +174,11 @@ def _update_pth_file(pth_filename, orig_path, is_pypy):
             else '../../..',   # venv/lib/pythonX.X/site-packages
             relto_original
         )
-        lines[i] = '{}\n'.format(relto_pth)
+        lines[i] = f'{relto_pth}\n'
     if changed:
         with open(pth_filename, 'w') as f:
             f.write(''.join(lines))
-        debug('P {}'.format(pth_filename))
+        debug(f'P {pth_filename}')
 
 
 def update_pth_files(site_packages, orig_path, is_pypy):
@@ -219,7 +196,7 @@ def remove_local(base):
     """
     local_dir = os.path.join(base, 'local')
     if os.path.exists(local_dir):  # pragma: no cover (not all systems)
-        debug('D {}'.format(local_dir))
+        debug(f'D {local_dir}')
         shutil.rmtree(local_dir)
 
 
@@ -303,7 +280,7 @@ def _get_original_state(path):
         raise NotAVirtualenvError(path, 'directory', site_packages)
 
     lib_dirs = [lib_dir]
-    if is_pypy:  # pragma: no cover (pypy only)
+    if is_pypy:  # pragma: pypy cover
         lib_dirs.append(os.path.join(path, 'lib_pypy'))
     return Virtualenv(
         path=path,
@@ -341,7 +318,7 @@ def main(argv=None):
         update_path = args.update_path
 
     if not os.path.isabs(update_path):
-        print('--update-path must be absolute: {}'.format(update_path))
+        print(f'--update-path must be absolute: {update_path}')
         return 1
 
     try:
@@ -351,11 +328,11 @@ def main(argv=None):
         return 1
 
     if venv.orig_path == update_path:
-        print('Already up-to-date: %s (%s)' % (venv.path, update_path))
+        print(f'Already up-to-date: {venv.path} ({update_path})')
         return 0
 
     update_paths(venv, update_path)
-    print('Updated: %s (%s -> %s)' % (venv.path, venv.orig_path, update_path))
+    print(f'Updated: {venv.path} ({venv.orig_path} -> {update_path})')
     return 0
 
 

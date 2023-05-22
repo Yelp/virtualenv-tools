@@ -1,0 +1,28 @@
+on:
+  pull_request:
+  push:
+    branches: [master, test-me-*]
+
+jobs:
+  main:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+        - env: py38
+          py: '3.8'
+        - env: py39
+          py: '3.9'
+        - env: py310
+          py: '3.10'
+        - env: py311
+          py: '3.11'
+        - env: pypy3.9
+          py: 'pypy-3.9'
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.py }}
+    - run: pip install tox
+    - run: tox -e ${{ matrix.env }}
