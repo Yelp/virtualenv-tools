@@ -27,7 +27,7 @@ ACTIVATION_SCRIPTS = [
     'activate.xsh',
 ]
 _pybin_match = re.compile(r'^python\d+\.\d+$')
-_pypy_match = re.compile(r'^\d+(.\d+)?$')
+_pypy_match = re.compile(r'^pypy\d+.\d+$')
 _activation_path_re = re.compile(
     r'^(?:set -gx |setenv |)VIRTUAL_ENV[ =][\'"](.*?)[\'"]\s*$',
 )
@@ -157,7 +157,7 @@ def update_pycs(lib_dir, new_path):
                 update_pyc(filename, local_path)
 
 
-def _update_pth_file(pth_filename, orig_path, is_pypy):
+def _update_pth_file(pth_filename, orig_path):
     with open(pth_filename) as f:
         lines = f.readlines()
     changed = False
@@ -170,8 +170,7 @@ def _update_pth_file(pth_filename, orig_path, is_pypy):
         # If we are moving a pypy venv the site-packages directory
         # is in a different location than if we are moving a cpython venv
         relto_pth = os.path.join(
-            '..' if is_pypy    # venv/site-packages
-            else '../../..',   # venv/lib/pythonX.X/site-packages
+            '../../..',   # venv/lib/pythonX.X/site-packages
             relto_original
         )
         lines[i] = f'{relto_pth}\n'
@@ -181,12 +180,12 @@ def _update_pth_file(pth_filename, orig_path, is_pypy):
         debug(f'P {pth_filename}')
 
 
-def update_pth_files(site_packages, orig_path, is_pypy):
+def update_pth_files(site_packages, orig_path):
     """Converts /full/paths in pth files to relative relocatable paths."""
     for filename in os.listdir(site_packages):
         filename = os.path.join(site_packages, filename)
         if filename.endswith('.pth') and os.path.isfile(filename):
-            _update_pth_file(filename, orig_path, is_pypy)
+            _update_pth_file(filename, orig_path)
 
 
 def remove_local(base):
@@ -205,7 +204,7 @@ def update_paths(venv, new_path):
     update_scripts(venv.bin_dir, venv.orig_path, new_path)
     for lib_dir in venv.lib_dirs:
         update_pycs(lib_dir, new_path)
-    update_pth_files(venv.site_packages, venv.orig_path, venv.is_pypy)
+    update_pth_files(venv.site_packages, venv.orig_path)
     remove_local(venv.path)
     update_scripts(venv.bin_dir, venv.orig_path, new_path, activation=True)
 
@@ -244,15 +243,14 @@ Virtualenv = collections.namedtuple(
         'lib_dirs',
         'site_packages',
         'orig_path',
-        'is_pypy'
     ),
 )
 
 
 def _get_original_state(path):
-    is_pypy = os.path.isdir(os.path.join(path, 'lib_pypy'))
+    is_pypy = os.path.isfile(os.path.join(path, 'bin', 'pypy'))
     bin_dir = os.path.join(path, 'bin')
-    base_lib_dir = os.path.join(path, 'lib-python' if is_pypy else 'lib')
+    base_lib_dir = os.path.join(path, 'lib')
     activate_file = os.path.join(bin_dir, 'activate')
 
     for dir_path in (bin_dir, base_lib_dir):
@@ -271,24 +269,20 @@ def _get_original_state(path):
         raise NotAVirtualenvError(
             path,
             'directory',
-            os.path.join(base_lib_dir, '#(.#)?' if is_pypy else 'python#.#'),
+            os.path.join(base_lib_dir, 'pypy#.#)' if is_pypy else 'python#.#'),
         )
     lib_dir, = lib_dirs
 
-    site_packages = os.path.join(path if is_pypy else lib_dir, 'site-packages')
+    site_packages = os.path.join(lib_dir, 'site-packages')
     if not os.path.isdir(site_packages):
         raise NotAVirtualenvError(path, 'directory', site_packages)
 
-    lib_dirs = [lib_dir]
-    if is_pypy:  # pragma: pypy cover
-        lib_dirs.append(os.path.join(path, 'lib_pypy'))
     return Virtualenv(
         path=path,
         bin_dir=bin_dir,
-        lib_dirs=lib_dirs,
+        lib_dirs=[lib_dir],
         site_packages=site_packages,
         orig_path=get_orig_path(path),
-        is_pypy=is_pypy
     )
 
 

@@ -152,9 +152,9 @@ def test_move_with_auto(venv, capsys):
     assert_virtualenv_state(venv.after)
 
 
-if platform.python_implementation() == 'PyPy':  # pragma: no cover (pypy)
-    libdir_fmt = 'lib-python/{}.{}'
-else:  # pragma: no cover (non-pypy)
+if platform.python_implementation() == 'PyPy':  # pragma: pypy cover
+    libdir_fmt = 'lib/pypy{}.{}/'
+else:  # pragma: pypy no cover
     libdir_fmt = 'lib/python{}.{}'
 
 
