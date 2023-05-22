@@ -10,14 +10,17 @@
     :copyright: (c) 2012 by Fireteam Ltd.
     :license: BSD, see LICENSE for more details.
 """
+from __future__ import annotations
+
 import argparse
-import collections
 import marshal
 import os.path
 import re
 import shutil
 import sys
 from types import CodeType
+from typing import NamedTuple
+from typing import Sequence
 
 
 ACTIVATION_SCRIPTS = [
@@ -39,17 +42,17 @@ VERBOSE = False
 MAGIC_LENGTH = 4 + 4 + 4 + 4
 
 
-def debug(msg):
+def debug(msg: str) -> None:
     if VERBOSE:
         print(msg)
 
 
-def update_activation_script(script_filename, new_path):
+def update_activation_script(script_filename: str, new_path: str) -> None:
     """Updates the paths for the activate shell scripts."""
     with open(script_filename) as f:
         lines = list(f)
 
-    def _handle_sub(match):
+    def _handle_sub(match: re.Match[str]) -> str:
         text = match.group()
         start, end = match.span()
         g_start, g_end = match.span(1)
@@ -68,16 +71,20 @@ def update_activation_script(script_filename, new_path):
             f.writelines(lines)
 
 
-def path_is_within(path, within):
+def path_is_within(path: bytes, within: bytes) -> bool:
     relpath = os.path.relpath(path, within)
     return not relpath.startswith(b'.')
 
 
-def update_script(script_filename, old_path, new_path):
+def update_script(
+        script_filename: str,
+        old_path_s: str,
+        new_path_s: str,
+) -> None:
     """Updates shebang lines for actual scripts."""
     filesystem_encoding = sys.getfilesystemencoding()
-    old_path = old_path.encode(filesystem_encoding)
-    new_path = new_path.encode(filesystem_encoding)
+    old_path = old_path_s.encode(filesystem_encoding)
+    new_path = new_path_s.encode(filesystem_encoding)
 
     with open(script_filename, 'rb') as f:
         if f.read(2) != b'#!':
@@ -100,7 +107,12 @@ def update_script(script_filename, old_path, new_path):
         f.writelines(lines)
 
 
-def update_scripts(bin_dir, orig_path, new_path, activation=False):
+def update_scripts(
+        bin_dir: str,
+        orig_path: str,
+        new_path: str,
+        activation: bool = False,
+) -> None:
     """Updates all scripts in the bin folder."""
     for fname in os.listdir(bin_dir):
         path = os.path.join(bin_dir, fname)
@@ -110,17 +122,17 @@ def update_scripts(bin_dir, orig_path, new_path, activation=False):
             update_script(path, orig_path, new_path)
 
 
-def update_pyc(filename, new_path):
+def update_pyc(filename: str, new_path: str) -> None:
     """Updates the filenames stored in pyc files."""
-    with open(filename, 'rb') as f:
-        magic = f.read(MAGIC_LENGTH)
+    with open(filename, 'rb') as rf:
+        magic = rf.read(MAGIC_LENGTH)
         try:
-            code = marshal.load(f)
+            code = marshal.load(rf)
         except Exception:
             print('Error in %s' % filename)
             raise
 
-    def _process(code):
+    def _process(code: CodeType) -> CodeType:
         consts = []
         for const in code.co_consts:
             if type(const) is CodeType:
@@ -134,14 +146,14 @@ def update_pyc(filename, new_path):
 
     if new_code is not code:
         debug('B %s' % filename)
-        with open(filename, 'wb') as f:
-            f.write(magic)
-            marshal.dump(new_code, f)
+        with open(filename, 'wb') as wf:
+            wf.write(magic)
+            marshal.dump(new_code, wf)
 
 
-def update_pycs(lib_dir, new_path):
+def update_pycs(lib_dir: str, new_path: str) -> None:
     """Walks over all pyc files and updates their paths."""
-    def get_new_path(filename):
+    def get_new_path(filename: str) -> str:
         filename = os.path.normpath(filename)
         return os.path.join(new_path, filename[len(lib_dir) + 1:])
 
@@ -157,7 +169,7 @@ def update_pycs(lib_dir, new_path):
                 update_pyc(filename, local_path)
 
 
-def _update_pth_file(pth_filename, orig_path):
+def _update_pth_file(pth_filename: str, orig_path: str) -> None:
     with open(pth_filename) as f:
         lines = f.readlines()
     changed = False
@@ -180,7 +192,7 @@ def _update_pth_file(pth_filename, orig_path):
         debug(f'P {pth_filename}')
 
 
-def update_pth_files(site_packages, orig_path):
+def update_pth_files(site_packages: str, orig_path: str) -> None:
     """Converts /full/paths in pth files to relative relocatable paths."""
     for filename in os.listdir(site_packages):
         filename = os.path.join(site_packages, filename)
@@ -188,7 +200,7 @@ def update_pth_files(site_packages, orig_path):
             _update_pth_file(filename, orig_path)
 
 
-def remove_local(base):
+def remove_local(base: str) -> None:
     """On some systems virtualenv seems to have something like a local
     directory with symlinks.  This directory is safe to remove in modern
     versions of virtualenv.  Delete it.
@@ -199,7 +211,7 @@ def remove_local(base):
         shutil.rmtree(local_dir)
 
 
-def update_paths(venv, new_path):
+def update_paths(venv: Virtualenv, new_path: str) -> None:
     """Updates all paths in a virtualenv to a new one."""
     update_scripts(venv.bin_dir, venv.orig_path, new_path)
     for lib_dir in venv.lib_dirs:
@@ -209,7 +221,7 @@ def update_paths(venv, new_path):
     update_scripts(venv.bin_dir, venv.orig_path, new_path, activation=True)
 
 
-def get_orig_path(venv_path):
+def get_orig_path(venv_path: str) -> str:
     """This helps us know whether someone has tried to relocate the
     virtualenv
     """
@@ -228,26 +240,20 @@ def get_orig_path(venv_path):
             )
 
 
-class NotAVirtualenvError(OSError):
-    def __init__(self, *args):
-        self.args = args
-
-    def __str__(self):
+class NotAVirtualenvError(ValueError):
+    def __str__(self) -> str:
         return '{} is not a virtualenv: not a {}: {}'.format(*self.args)
 
 
-Virtualenv = collections.namedtuple(
-    'Virtualenv', (
-        'path',
-        'bin_dir',
-        'lib_dirs',
-        'site_packages',
-        'orig_path',
-    ),
-)
+class Virtualenv(NamedTuple):
+    path: str
+    bin_dir: str
+    lib_dirs: list[str]
+    site_packages: str
+    orig_path: str
 
 
-def _get_original_state(path):
+def _get_original_state(path: str) -> Virtualenv:
     is_pypy = os.path.isfile(os.path.join(path, 'bin', 'pypy'))
     bin_dir = os.path.join(path, 'bin')
     base_lib_dir = os.path.join(path, 'lib')
@@ -286,7 +292,7 @@ def _get_original_state(path):
     )
 
 
-def main(argv=None):
+def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '--update-path',
@@ -331,4 +337,4 @@ def main(argv=None):
 
 
 if __name__ == '__main__':
-    exit(main())
+    raise SystemExit(main())
