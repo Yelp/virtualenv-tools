@@ -1,6 +1,6 @@
 import collections
-import pipes
 import platform
+import shlex
 import subprocess
 import sys
 
@@ -13,7 +13,7 @@ def auto_namedtuple(**kwargs):
     return collections.namedtuple('ns', tuple(kwargs))(**kwargs)
 
 
-@pytest.yield_fixture
+@pytest.fixture
 def venv(tmpdir):
     app_before = tmpdir.join('before').ensure_dir()
     app_before.join('mymodule.py').write(
@@ -42,7 +42,7 @@ def venv(tmpdir):
 
 def run(before, after, args=()):
     ret = virtualenv_tools.main(
-        (before.strpath, '--update-path={}'.format(after.strpath)) + args,
+        (before.strpath, f'--update-path={after.strpath}') + args,
     )
     assert ret == 0
 
@@ -81,9 +81,9 @@ def _assert_activated_sys_executable(path):
     exe = subprocess.check_output((
         'bash', '-c',
         ". {} && python -c 'import sys; print(sys.executable)'".format(
-            pipes.quote(path.join('bin/activate').strpath),
+            shlex.quote(path.join('bin/activate').strpath),
         )
-    )).decode('UTF-8').strip()
+    )).decode().strip()
     assert exe == path.join('bin/python').strpath
 
 
@@ -92,7 +92,7 @@ def _assert_mymodule_output(path):
         (path.join('bin/python').strpath, '-m', 'mymodule'),
         # Run from '/' to ensure we're not importing from .
         cwd='/',
-    ).decode('UTF-8')
+    ).decode()
     assert out == 'ohai!\n'
 
 
@@ -152,9 +152,9 @@ def test_move_with_auto(venv, capsys):
     assert_virtualenv_state(venv.after)
 
 
-if platform.python_implementation() == 'PyPy':  # pragma: no cover (pypy)
-    libdir_fmt = 'lib-python/{}.{}'
-else:  # pragma: no cover (non-pypy)
+if platform.python_implementation() == 'PyPy':  # pragma: pypy cover
+    libdir_fmt = 'lib/pypy{}.{}/'
+else:  # pragma: pypy no cover
     libdir_fmt = 'lib/python{}.{}'
 
 
@@ -167,7 +167,7 @@ def test_bad_pyc(venv, capsys):
         with pytest.raises(ValueError):
             run(venv.before, venv.after)
         out, _ = capsys.readouterr()
-        assert out == 'Error in {}\n'.format(bad_pyc.strpath)
+        assert out == f'Error in {bad_pyc.strpath}\n'
 
 
 def test_dir_oddities(venv):
@@ -195,7 +195,7 @@ def test_non_absolute_error(capsys):
     assert out == '--update-path must be absolute: notabs\n'
 
 
-@pytest.yield_fixture
+@pytest.fixture
 def fake_venv(tmpdir):
     tmpdir.join('bin').ensure_dir()
     tmpdir.join('lib/python2.7/site-packages').ensure_dir()
