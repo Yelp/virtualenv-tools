@@ -61,6 +61,18 @@ def test_already_up_to_date(venv, capsys):
     assert out == 'Already up-to-date: {0} ({0})\n'.format(venv.before)
 
 
+def test_bourne_shell_exec(venv, capsys):
+    venv.before.join('bin').join('bourne.py').write(
+        "#!/bin/sh\n"
+        f"""'''exec' {venv.before.strpath}/bin/python "$0" "$@"\n"""
+        "' '''\n")
+
+    run(venv.before, venv.after)
+    out, _ = capsys.readouterr()
+    expected = 'Updated: {0} ({0} -> {1})\n'.format(venv.before, venv.after)
+    assert out == expected
+
+
 def test_each_part_idempotent(tmpdir, venv, capsys):
     activate = venv.before.join('bin/activate')
     before_activate_contents = activate.read()
