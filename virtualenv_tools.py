@@ -91,17 +91,42 @@ def update_script(
             return
         f.seek(0)
         lines = list(f)
-    args = lines[0][2:].strip().split()
-    if not args:
-        return
 
-    if path_is_within(args[0], old_path):
-        new_bin = os.path.join(new_path, os.path.relpath(args[0], old_path))
+    # is this a python script being run under a bourne exec call
+    if (
+            len(lines) >= 2 and
+            lines[0] == b'#!/bin/sh\n' and
+            lines[1].startswith(b"'''exec' ")
+    ):
+        args = lines[1].strip().split()
+
+        if path_is_within(args[1], old_path):
+            new_bin = os.path.join(
+                new_path,
+                os.path.relpath(args[1], old_path)
+            )
+        else:
+            return
+
+        args[1] = new_bin
+        lines[1] = b' '.join(args) + b'\n'
     else:
-        return
+        args = lines[0][2:].strip().split()
 
-    args[0] = new_bin
-    lines[0] = b'#!' + b' '.join(args) + b'\n'
+        if not args:
+            return
+
+        if path_is_within(args[0], old_path):
+            new_bin = os.path.join(
+                new_path,
+                os.path.relpath(args[0], old_path)
+            )
+        else:
+            return
+
+        args[0] = new_bin
+        lines[0] = b'#!' + b' '.join(args) + b'\n'
+
     debug('S %s' % script_filename)
     with open(script_filename, 'wb') as f:
         f.writelines(lines)
