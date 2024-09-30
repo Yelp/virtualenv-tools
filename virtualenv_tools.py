@@ -16,6 +16,7 @@ import argparse
 import marshal
 import os.path
 import re
+import shlex
 import shutil
 import sys
 from types import CodeType
@@ -32,7 +33,7 @@ ACTIVATION_SCRIPTS = [
 _pybin_match = re.compile(r'^python\d+\.\d+$')
 _pypy_match = re.compile(r'^pypy\d+.\d+$')
 _activation_path_re = re.compile(
-    r'^(?:set -gx |setenv |)VIRTUAL_ENV[ =][\'"](.*?)[\'"]\s*$',
+    r'^(?:set -gx |setenv |)VIRTUAL_ENV[ =][\'"]?(.*?)[\'"]?\s*$',
 )
 VERBOSE = False
 # magic length
@@ -253,11 +254,11 @@ def get_orig_path(venv_path: str) -> str:
     activate_path = os.path.join(venv_path, 'bin/activate')
 
     with open(activate_path) as activate:
+        venv_var_prefix = 'VIRTUAL_ENV='
         for line in activate:
             # virtualenv 20 changes the position
-            for possible in ('VIRTUAL_ENV="', "VIRTUAL_ENV='"):
-                if line.startswith(possible):
-                    return line.split(possible[-1], 2)[1]
+            if line.startswith(venv_var_prefix):
+                return shlex.split(line[len(venv_var_prefix):])[0]
         else:
             raise AssertionError(
                 'Could not find VIRTUAL_ENV= in activation script: %s' %
