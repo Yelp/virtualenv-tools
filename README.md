@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/Yelp/virtualenv-tools.svg?branch=master)](https://travis-ci.org/Yelp/virtualenv-tools)
+[![Build Status](https://github.com/Yelp/virtualenv-tools/actions/workflows/main.yml/badge.svg?query=branch%3Amain)](https://github.com/Yelp/virtualenv-tools/actions/workflows/main.yml)
 [![Coverage Status](https://img.shields.io/coveralls/Yelp/virtualenv-tools.svg?branch=master)](https://coveralls.io/r/Yelp/virtualenv-tools)
 [![PyPI version](https://badge.fury.io/py/virtualenv-tools3.svg)](https://pypi.python.org/pypi/virtualenv-tools3)
 
