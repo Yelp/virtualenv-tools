@@ -208,10 +208,18 @@ def test_non_absolute_error(capsys):
 
 
 @pytest.fixture
+def fake_venv_quoted(tmpdir):
+    tmpdir.join('bin').ensure_dir()
+    tmpdir.join('lib/python2.7/site-packages').ensure_dir()
+    tmpdir.join('bin/activate').write('VIRTUAL_ENV="/venv"\n')
+    yield tmpdir
+
+
+@pytest.fixture
 def fake_venv(tmpdir):
     tmpdir.join('bin').ensure_dir()
     tmpdir.join('lib/python2.7/site-packages').ensure_dir()
-    tmpdir.join('bin/activate').write('VIRTUAL_ENV=/venv')
+    tmpdir.join('bin/activate').write('VIRTUAL_ENV=/venv\n')
     yield tmpdir
 
 
@@ -257,3 +265,22 @@ def test_not_a_virtualenv_missing_versioned_lib_directory(fake_venv, capsys):
         fake_venv, fake_venv.join('lib/python#.#'),
     )
     assert out == expected
+
+
+def test_virtualenv_path_works_with_quoted_path(fake_venv_quoted, capsys):
+    ret = virtualenv_tools.main(
+        ('--update-path=auto', fake_venv_quoted.strpath)
+    )
+    out, _ = capsys.readouterr()
+    assert ret == 0
+    assert out.startswith('Updated: ')
+    assert '/venv ->' in out
+
+
+def test_virtualenv_path_works_with_nonquoted_path(fake_venv, capsys):
+    ret = virtualenv_tools.main(('--update-path=auto', fake_venv.strpath))
+    out, _ = capsys.readouterr()
+    assert ret == 0
+    assert out.startswith('Updated: ')
+    assert '/venv ->' in out
+
