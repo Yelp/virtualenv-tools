@@ -284,3 +284,8 @@ def test_virtualenv_path_works_with_nonquoted_path(fake_venv, capsys):
     assert out.startswith('Updated: ')
     assert '/venv ->' in out
 
+
+def test_get_orig_path(venv):
+    activate = venv.before
+    orig_path = virtualenv_tools.get_orig_path(activate)
+    assert orig_path == venv.before.strpath
