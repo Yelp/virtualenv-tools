@@ -247,14 +247,10 @@ def update_paths(venv: Virtualenv, new_path: str) -> None:
     remove_local(venv.path)
     update_scripts(venv.bin_dir, venv.orig_path, new_path, activation=True)
 
-
 def get_orig_path(venv_path: str) -> str:
     """This helps us know whether someone has tried to relocate the
     virtualenv
     """
-    return get_virtualenv_path_from_activate(venv_path)
-
-def get_virtualenv_path_from_activate(venv_path: str) -> str:
     activate_path = os.path.join(venv_path, 'bin/activate')
     result = subprocess.run(["bash", "-c", f"source {activate_path} && echo $VIRTUAL_ENV"], capture_output=True, text=True)
     return result.stdout.strip()
