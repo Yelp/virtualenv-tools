@@ -18,6 +18,7 @@ import os.path
 import re
 import shlex
 import shutil
+import subprocess
 import sys
 from types import CodeType
 from typing import NamedTuple
@@ -265,6 +266,10 @@ def get_orig_path(venv_path: str) -> str:
                 activate_path
             )
 
+def get_virtualenv_path_from_activate(venv_path: str) -> str:
+    activate_path = os.path.join(venv_path, 'bin/activate')
+    result = subprocess.run(["bash", "-c", f"source {activate_path} && echo $VIRTUAL_ENV"], capture_output=True, text=True)
+    return result.stdout.strip()
 
 class NotAVirtualenvError(ValueError):
     def __str__(self) -> str:
