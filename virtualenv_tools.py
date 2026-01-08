@@ -252,19 +252,7 @@ def get_orig_path(venv_path: str) -> str:
     """This helps us know whether someone has tried to relocate the
     virtualenv
     """
-    activate_path = os.path.join(venv_path, 'bin/activate')
-
-    with open(activate_path) as activate:
-        venv_var_prefix = 'VIRTUAL_ENV='
-        for line in activate:
-            # virtualenv 20 changes the position
-            if line.startswith(venv_var_prefix):
-                return shlex.split(line[len(venv_var_prefix):])[0]
-        else:
-            raise AssertionError(
-                'Could not find VIRTUAL_ENV= in activation script: %s' %
-                activate_path
-            )
+    return get_virtualenv_path_from_activate(venv_path)
 
 def get_virtualenv_path_from_activate(venv_path: str) -> str:
     activate_path = os.path.join(venv_path, 'bin/activate')
