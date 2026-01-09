@@ -310,7 +310,7 @@ def test_update_activation_script(venv, script_name):
     assert venv.before.strpath in original_content
 
     # Update the activation script
-    virtualenv_tools.update_activation_script(script_path, venv.after.strpath)
+    virtualenv_tools.update_activation_script(script_path, venv.before.strpath, venv.after.strpath)
 
     # Verify the new path is in the file
     with open(script_path) as f:
@@ -324,14 +324,14 @@ def test_update_activation_script_no_change_when_already_updated(venv):
     activate_path = venv.before.join('bin/activate').strpath
 
     # First update to the new path
-    virtualenv_tools.update_activation_script(activate_path, venv.after.strpath)
+    virtualenv_tools.update_activation_script(activate_path, venv.before.strpath, venv.after.strpath)
 
     # Read the content after first update
     with open(activate_path) as f:
         content_after_first = f.read()
 
     # Try updating again with the same path
-    virtualenv_tools.update_activation_script(activate_path, venv.after.strpath)
+    virtualenv_tools.update_activation_script(activate_path, venv.before.strpath, venv.after.strpath)
 
     # Verify content hasn't changed
     with open(activate_path) as f:
