@@ -60,10 +60,19 @@ def update_activation_script(script_filename: str, old_path: str, new_path: str)
 
     changed = False
     for idx, line in enumerate(lines):
-        new_line = _activation_path_re.sub(_handle_sub, line)
-        if line != new_line:
-            lines[idx] = new_line
-            changed = True
+        if os.path.basename(script_filename) == 'activate':
+            # The bash activate script changed in virtualenv 20.36.0.
+            # It now has multiple references to the old_path that don't match the original regex
+            new_line = line.replace(old_path, new_path)
+            if line != new_line:
+                lines[idx] = new_line
+                changed = True
+        else:
+            new_line = _activation_path_re.sub(_handle_sub, line)
+            if line != new_line:
+                lines[idx] = new_line
+                changed = True
+
 
     if changed:
         debug('A %s' % script_filename)
