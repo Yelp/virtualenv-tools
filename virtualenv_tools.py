@@ -260,7 +260,10 @@ def get_orig_path(venv_path: str) -> str:
             venv_var_line = line.strip()
             if venv_var_line.startswith(venv_var_prefix):
                 venv_var_value = shlex.split(venv_var_line[len(venv_var_prefix):])[0]
-                return venv_var_value
+                # This value could be a bash expression or a path.
+                # Validate it's a path-like string.
+                if os.path.isabs(venv_var_value):
+                    return venv_var_value
         else:
             raise AssertionError(
                 'Could not find VIRTUAL_ENV= in activation script: %s' %
