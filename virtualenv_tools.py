@@ -259,7 +259,8 @@ def get_orig_path(venv_path: str) -> str:
             # virtualenv 20 changes the position
             venv_var_line = line.strip()
             if venv_var_line.startswith(venv_var_prefix):
-                return shlex.split(venv_var_line[len(venv_var_prefix):])[0]
+                venv_var_value = shlex.split(venv_var_line[len(venv_var_prefix):])[0]
+                return venv_var_value
         else:
             raise AssertionError(
                 'Could not find VIRTUAL_ENV= in activation script: %s' %
