@@ -289,3 +289,52 @@ def test_get_orig_path(venv):
     activate = venv.before
     orig_path = virtualenv_tools.get_orig_path(activate)
     assert orig_path == venv.before.strpath
+
+
+@pytest.mark.parametrize(
+    'script_name',
+    [
+        'activate',
+        'activate.csh',
+        'activate.fish',
+        pytest.param('activate.xsh', marks=pytest.mark.xfail(reason='activate.xsh removed in virtualenv 20.7.0')),
+    ],
+)
+def test_update_activation_script(venv, script_name):
+    """Test update_activation_script updates activation scripts."""
+    script_path = venv.before.join(f'bin/{script_name}').strpath
+
+    # Read original content to verify it has the old path
+    with open(script_path) as f:
+        original_content = f.read()
+    assert venv.before.strpath in original_content
+
+    # Update the activation script
+    virtualenv_tools.update_activation_script(script_path, venv.after.strpath)
+
+    # Verify the new path is in the file
+    with open(script_path) as f:
+        updated_content = f.read()
+    assert venv.after.strpath in updated_content
+    assert venv.before.strpath not in updated_content
+
+
+def test_update_activation_script_no_change_when_already_updated(venv):
+    """Test that update_activation_script doesn't modify file if path is already correct."""
+    activate_path = venv.before.join('bin/activate').strpath
+
+    # First update to the new path
+    virtualenv_tools.update_activation_script(activate_path, venv.after.strpath)
+
+    # Read the content after first update
+    with open(activate_path) as f:
+        content_after_first = f.read()
+
+    # Try updating again with the same path
+    virtualenv_tools.update_activation_script(activate_path, venv.after.strpath)
+
+    # Verify content hasn't changed
+    with open(activate_path) as f:
+        content_after_second = f.read()
+
+    assert content_after_first == content_after_second
