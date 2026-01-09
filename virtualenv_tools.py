@@ -257,7 +257,7 @@ def get_orig_path(venv_path: str) -> str:
         venv_var_prefix = 'VIRTUAL_ENV='
         for line in activate:
             # virtualenv 20 changes the position
-            venv_var_line = line
+            venv_var_line = line.strip()
             if venv_var_line.startswith(venv_var_prefix):
                 return shlex.split(venv_var_line[len(venv_var_prefix):])[0]
         else:
