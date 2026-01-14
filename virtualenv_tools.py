@@ -220,7 +220,7 @@ def update_pycs(lib_dir: str, new_path: str) -> None:
                 update_pyc(filename, local_path)
 
 
-def _update_pth_file(pth_filename: str, orig_path: str) -> None:
+def _update_pth_file(pth_filename: str, orig_path: str) -> None: # pragma: <3.9 cover
     with open(pth_filename) as f:
         lines = f.readlines()
     changed = False
@@ -251,6 +251,40 @@ def update_pth_files(site_packages: str, orig_path: str) -> None:
             _update_pth_file(filename, orig_path)
 
 
+def _update_editable_finder_file(filepath: str, orig_path: str, new_path: str) -> None:  # pragma: >=3.9 cover
+    with open(filepath) as f:
+        lines = f.readlines()
+    changed = False
+    orig_parent = os.path.dirname(orig_path)
+    new_parent = os.path.dirname(new_path)
+    for i, line in enumerate(lines):
+        if orig_parent not in line:
+            continue
+        changed = True
+        new_line = ''
+        pos = 0
+        while True:
+            idx = line.find(orig_parent, pos)
+            if idx == -1:
+                new_line += line[pos:]
+                break
+            new_line += line[pos:idx] + new_parent
+            pos = idx + len(orig_parent)
+        lines[i] = new_line
+    if changed:
+        with open(filepath, 'w') as f:
+            f.write(''.join(lines))
+        debug(f'F {filepath}')
+
+
+def update_editable_finder_files(site_packages: str, orig_path: str, new_path: str) -> None:  # pragma: >=3.9 cover
+    """Updates paths in editable install finder files created by modern pip."""
+    for filename in os.listdir(site_packages):
+        filepath = os.path.join(site_packages, filename)
+        if filename.startswith('__editable__') and filename.endswith('_finder.py') and os.path.isfile(filepath):
+                _update_editable_finder_file(filepath, orig_path, new_path)
+
+
 def remove_local(base: str) -> None:
     """On some systems virtualenv seems to have something like a local
     directory with symlinks.  This directory is safe to remove in modern
@@ -268,6 +302,7 @@ def update_paths(venv: Virtualenv, new_path: str) -> None:
     for lib_dir in venv.lib_dirs:
         update_pycs(lib_dir, new_path)
     update_pth_files(venv.site_packages, venv.orig_path)
+    update_editable_finder_files(venv.site_packages, venv.orig_path, new_path)
     remove_local(venv.path)
     update_scripts(venv.bin_dir, venv.orig_path, new_path, activation=True)
 
