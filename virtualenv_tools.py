@@ -35,6 +35,16 @@ _pypy_match = re.compile(r'^pypy\d+.\d+$')
 _activation_path_re = re.compile(
     r'^(?:set -gx |setenv |)VIRTUAL_ENV[ =][\'"]?(.*?)[\'"]?\s*$',
 )
+# Bash activate script patterns (for virtualenv 20.36.0+)
+_bash_if_check_re = re.compile(
+    r'^if \[ ! -d (.+?)(?: \]; then.*)',
+)
+_bash_echo_path_re = re.compile(
+    r'^(?:\s*)echo "Virtual environment directory (.+?)(?: does not exist!" >&2.*)',
+)
+_bash_virtual_env_re = re.compile(
+    r'^(?:\s*)VIRTUAL_ENV=(?![\'"]?\$)[\'"]?([^\s\'"]+)(?:[\'"]?\s*)',
+)
 VERBOSE = False
 # magic length
 # + 4 byte timestamp
@@ -63,7 +73,14 @@ def update_activation_script(script_filename: str, old_path: str, new_path: str)
         if os.path.basename(script_filename) == 'activate':
             # The bash activate script changed in virtualenv 20.36.0.
             # It now has multiple references to the old_path that don't match the original regex
-            new_line = line.replace(old_path, new_path)
+            # We need to handle multiple patterns:
+            # 1. if [ ! -d /path ]; then
+            # 2.     echo "Virtual environment directory /path does not exist!" >&2
+            # 3.     VIRTUAL_ENV=/path or VIRTUAL_ENV='/path' (with leading whitespace)
+            new_line = line
+            new_line = _bash_if_check_re.sub(_handle_sub, new_line)
+            new_line = _bash_echo_path_re.sub(_handle_sub, new_line)
+            new_line = _bash_virtual_env_re.sub(_handle_sub, new_line)
             if line != new_line:
                 lines[idx] = new_line
                 changed = True
