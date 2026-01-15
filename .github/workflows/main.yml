@@ -17,6 +17,12 @@ jobs:
           py: '3.10'
         - env: py311
           py: '3.11'
+        - env: py312
+          py: '3.12'
+        - env: py313
+          py: '3.13'
+        - env: py314
+          py: '3.14'
         - env: pypy3.9
           py: 'pypy-3.9'
     steps:
