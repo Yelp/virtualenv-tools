@@ -81,14 +81,12 @@ def update_activation_script(script_filename: str, new_path: str) -> None:
             new_line = _bash_if_check_re.sub(_handle_sub, new_line)
             new_line = _bash_echo_path_re.sub(_handle_sub, new_line)
             new_line = _bash_virtual_env_re.sub(_handle_sub, new_line)
-            if line != new_line:
-                lines[idx] = new_line
-                changed = True
         else:
             new_line = _activation_path_re.sub(_handle_sub, line)
-            if line != new_line:
-                lines[idx] = new_line
-                changed = True
+
+        if line != new_line:
+            lines[idx] = new_line
+            changed = True
 
 
     if changed:
