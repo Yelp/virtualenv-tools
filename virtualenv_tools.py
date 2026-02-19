@@ -57,7 +57,7 @@ def debug(msg: str) -> None:
     if VERBOSE:
         print(msg)
 
-def update_activation_script(script_filename: str, old_path: str, new_path: str) -> None:
+def update_activation_script(script_filename: str, new_path: str) -> None:
     """Updates the paths for the activate shell scripts."""
     with open(script_filename) as f:
         lines = list(f)
@@ -168,7 +168,7 @@ def update_scripts(
     for fname in os.listdir(bin_dir):
         path = os.path.join(bin_dir, fname)
         if fname in ACTIVATION_SCRIPTS and activation:
-            update_activation_script(path, orig_path, new_path)
+            update_activation_script(path, new_path)
         elif os.path.isfile(path):
             update_script(path, orig_path, new_path)
 
