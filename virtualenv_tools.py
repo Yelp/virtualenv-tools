@@ -35,6 +35,16 @@ _pypy_match = re.compile(r'^pypy\d+.\d+$')
 _activation_path_re = re.compile(
     r'^(?:set -gx |setenv |)VIRTUAL_ENV[ =][\'"]?(.*?)[\'"]?\s*$',
 )
+# Bash activate script patterns (for virtualenv 20.36.0+)
+_bash_if_check_re = re.compile(
+    r'^if \[ ! -d (.+?)(?: \]; then.*)',
+)
+_bash_echo_path_re = re.compile(
+    r'^(?:\s*)echo "Virtual environment directory (.+?)(?: does not exist!" >&2.*)',
+)
+_bash_virtual_env_re = re.compile(
+    r'^(?:\s*)VIRTUAL_ENV=(?![\'"]?\$)[\'"]?([^\s\'"]+)(?:[\'"]?\s*)',
+)
 VERBOSE = False
 # magic length
 # + 4 byte timestamp
@@ -46,7 +56,6 @@ MAGIC_LENGTH = 4 + 4 + 4 + 4
 def debug(msg: str) -> None:
     if VERBOSE:
         print(msg)
-
 
 def update_activation_script(script_filename: str, new_path: str) -> None:
     """Updates the paths for the activate shell scripts."""
@@ -61,10 +70,24 @@ def update_activation_script(script_filename: str, new_path: str) -> None:
 
     changed = False
     for idx, line in enumerate(lines):
-        new_line = _activation_path_re.sub(_handle_sub, line)
+        if os.path.basename(script_filename) == 'activate':
+            # The bash activate script changed in virtualenv 20.36.0.
+            # It now has multiple references to the old_path that don't match the original regex
+            # We need to handle multiple patterns:
+            # 1. if [ ! -d /path ]; then
+            # 2.     echo "Virtual environment directory /path does not exist!" >&2
+            # 3.     VIRTUAL_ENV=/path or VIRTUAL_ENV='/path' (with leading whitespace)
+            new_line = line
+            new_line = _bash_if_check_re.sub(_handle_sub, new_line)
+            new_line = _bash_echo_path_re.sub(_handle_sub, new_line)
+            new_line = _bash_virtual_env_re.sub(_handle_sub, new_line)
+        else:
+            new_line = _activation_path_re.sub(_handle_sub, line)
+
         if line != new_line:
             lines[idx] = new_line
             changed = True
+
 
     if changed:
         debug('A %s' % script_filename)
@@ -195,7 +218,7 @@ def update_pycs(lib_dir: str, new_path: str) -> None:
                 update_pyc(filename, local_path)
 
 
-def _update_pth_file(pth_filename: str, orig_path: str) -> None:
+def _update_pth_file(pth_filename: str, orig_path: str) -> None: # pragma: <3.9 cover
     with open(pth_filename) as f:
         lines = f.readlines()
     changed = False
@@ -226,6 +249,40 @@ def update_pth_files(site_packages: str, orig_path: str) -> None:
             _update_pth_file(filename, orig_path)
 
 
+def _update_editable_finder_file(filepath: str, orig_path: str, new_path: str) -> None:  # pragma: >=3.9 cover
+    with open(filepath) as f:
+        lines = f.readlines()
+    changed = False
+    orig_parent = os.path.dirname(orig_path)
+    new_parent = os.path.dirname(new_path)
+    for i, line in enumerate(lines):
+        if orig_parent not in line:
+            continue
+        changed = True
+        new_line = ''
+        pos = 0
+        while True:
+            idx = line.find(orig_parent, pos)
+            if idx == -1:
+                new_line += line[pos:]
+                break
+            new_line += line[pos:idx] + new_parent
+            pos = idx + len(orig_parent)
+        lines[i] = new_line
+    if changed:
+        with open(filepath, 'w') as f:
+            f.write(''.join(lines))
+        debug(f'F {filepath}')
+
+
+def update_editable_finder_files(site_packages: str, orig_path: str, new_path: str) -> None:  # pragma: >=3.9 cover
+    """Updates paths in editable install finder files created by modern pip."""
+    for filename in os.listdir(site_packages):
+        filepath = os.path.join(site_packages, filename)
+        if filename.startswith('__editable__') and filename.endswith('_finder.py') and os.path.isfile(filepath):
+                _update_editable_finder_file(filepath, orig_path, new_path)
+
+
 def remove_local(base: str) -> None:
     """On some systems virtualenv seems to have something like a local
     directory with symlinks.  This directory is safe to remove in modern
@@ -243,6 +300,7 @@ def update_paths(venv: Virtualenv, new_path: str) -> None:
     for lib_dir in venv.lib_dirs:
         update_pycs(lib_dir, new_path)
     update_pth_files(venv.site_packages, venv.orig_path)
+    update_editable_finder_files(venv.site_packages, venv.orig_path, new_path)
     remove_local(venv.path)
     update_scripts(venv.bin_dir, venv.orig_path, new_path, activation=True)
 
@@ -257,8 +315,13 @@ def get_orig_path(venv_path: str) -> str:
         venv_var_prefix = 'VIRTUAL_ENV='
         for line in activate:
             # virtualenv 20 changes the position
-            if line.startswith(venv_var_prefix):
-                return shlex.split(line[len(venv_var_prefix):])[0]
+            venv_var_line = line.strip()
+            if venv_var_line.startswith(venv_var_prefix):
+                venv_var_value = shlex.split(venv_var_line[len(venv_var_prefix):])[0]
+                # This value could be a bash expression or a path.
+                # Validate it's a path-like string.
+                if os.path.isabs(venv_var_value):
+                    return venv_var_value
         else:
             raise AssertionError(
                 'Could not find VIRTUAL_ENV= in activation script: %s' %
