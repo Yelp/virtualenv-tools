@@ -28,23 +28,11 @@ ACTIVATION_SCRIPTS = [
     'activate',
     'activate.csh',
     'activate.fish',
+    'activate.nu',
     'activate.xsh',
 ]
 _pybin_match = re.compile(r'^python\d+\.\d+$')
 _pypy_match = re.compile(r'^pypy\d+.\d+$')
-_activation_path_re = re.compile(
-    r'^(?:set -gx |setenv |)VIRTUAL_ENV[ =][\'"]?(.*?)[\'"]?\s*$',
-)
-# Bash activate script patterns (for virtualenv 20.36.0+)
-_bash_if_check_re = re.compile(
-    r'^if \[ ! -d (.+?)(?: \]; then.*)',
-)
-_bash_echo_path_re = re.compile(
-    r'^(?:\s*)echo "Virtual environment directory (.+?)(?: does not exist!" >&2.*)',
-)
-_bash_virtual_env_re = re.compile(
-    r'^(?:\s*)VIRTUAL_ENV=(?![\'"]?\$)[\'"]?([^\s\'"]+)(?:[\'"]?\s*)',
-)
 VERBOSE = False
 # magic length
 # + 4 byte timestamp
@@ -57,42 +45,32 @@ def debug(msg: str) -> None:
     if VERBOSE:
         print(msg)
 
-def update_activation_script(script_filename: str, new_path: str) -> None:
-    """Updates the paths for the activate shell scripts."""
+def update_activation_script(
+        script_filename: str,
+        orig_path: str,
+        new_path: str,
+) -> None:
+    """Updates the paths for the activate shell scripts.
+
+    virtualenv renders its activation templates by substituting the venv
+    path in, so we swap every occurrence of the original path rather than
+    matching the template's lines. That keeps working when virtualenv
+    restructures a template (as it did in 20.36.0 and again in 21.14.9).
+    """
     with open(script_filename) as f:
-        lines = list(f)
+        contents = f.read()
 
-    def _handle_sub(match: re.Match[str]) -> str:
-        text = match.group()
-        start, end = match.span()
-        g_start, g_end = match.span(1)
-        return text[:(g_start - start)] + new_path + text[(g_end - end):]
+    # Only match the path as a whole: not preceded by, or continuing into,
+    # more path characters. "/venv" must not rewrite "/venv2" or "/a/venv".
+    path_re = re.compile(
+        r'(?<![\w.\-/])' + re.escape(orig_path) + r'(?![\w.\-])',
+    )
+    new_contents = path_re.sub(lambda _: new_path, contents)
 
-    changed = False
-    for idx, line in enumerate(lines):
-        if os.path.basename(script_filename) == 'activate':
-            # The bash activate script changed in virtualenv 20.36.0.
-            # It now has multiple references to the old_path that don't match the original regex
-            # We need to handle multiple patterns:
-            # 1. if [ ! -d /path ]; then
-            # 2.     echo "Virtual environment directory /path does not exist!" >&2
-            # 3.     VIRTUAL_ENV=/path or VIRTUAL_ENV='/path' (with leading whitespace)
-            new_line = line
-            new_line = _bash_if_check_re.sub(_handle_sub, new_line)
-            new_line = _bash_echo_path_re.sub(_handle_sub, new_line)
-            new_line = _bash_virtual_env_re.sub(_handle_sub, new_line)
-        else:
-            new_line = _activation_path_re.sub(_handle_sub, line)
-
-        if line != new_line:
-            lines[idx] = new_line
-            changed = True
-
-
-    if changed:
+    if new_contents != contents:
         debug('A %s' % script_filename)
         with open(script_filename, 'w') as f:
-            f.writelines(lines)
+            f.write(new_contents)
 
 
 def path_is_within(path: bytes, within: bytes) -> bool:
@@ -166,7 +144,7 @@ def update_scripts(
     for fname in os.listdir(bin_dir):
         path = os.path.join(bin_dir, fname)
         if fname in ACTIVATION_SCRIPTS and activation:
-            update_activation_script(path, new_path)
+            update_activation_script(path, orig_path, new_path)
         elif os.path.isfile(path):
             update_script(path, orig_path, new_path)
 

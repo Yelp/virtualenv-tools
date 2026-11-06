@@ -2,6 +2,11 @@ on:
   pull_request:
   push:
     branches: [master, test-me-*]
+  # tox installs the latest virtualenv, so this catches new releases that
+  # change the activation templates before we ship a broken mirror upgrade
+  schedule:
+  - cron: '0 15 * * 1'
+  workflow_dispatch:
 
 jobs:
   main:
