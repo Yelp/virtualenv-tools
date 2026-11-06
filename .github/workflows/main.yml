@@ -10,29 +10,38 @@ on:
 
 jobs:
   main:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         include:
         - env: py38
           py: '3.8'
+          os: ubuntu-24.04
         - env: py39
           py: '3.9'
+          os: ubuntu-24.04
         - env: py310
           py: '3.10'
+          os: ubuntu-26.04
         - env: py311
           py: '3.11'
+          os: ubuntu-26.04
         - env: py312
           py: '3.12'
+          os: ubuntu-26.04
         - env: py313
           py: '3.13'
+          os: ubuntu-26.04
         - env: py314
           py: '3.14'
+          os: ubuntu-26.04
         - env: pypy3.9
           py: 'pypy-3.9'
+          os: ubuntu-26.04
     steps:
-    - uses: actions/checkout@v3
-    - uses: actions/setup-python@v4
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.py }}
     - run: pip install tox
